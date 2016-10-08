@@ -46,26 +46,29 @@ public:
     bool num_read(string path);
     bool rect_read(int i);
     bool rect_read(string path);
-    bool img_read(int i);
+//    bool img_read(int i);
     bool img_read(string path);
 
     //convert one element(path, num, rect, params) to the needed format
-    string img_path_convert(); //not need for this time
+    string img_path_convert(string path);
     int num_convert(string num);
     Rect rect_convert(string rect);
 
     //write the positive sample or the negative sample
     bool sample_write(int i);
-    bool positive_write(int i);
-    bool negative_write(int i);
-    bool img_write();
-    bool txt_write();
+    Mat crop(Mat img, Rect rect);
+//    bool positive_write(int i);
+//    bool negative_write(int i);
+    vector<Rect> get_negative(Mat img, vector<Rect> rect, float threshold_);
+    bool img_write(string path, Mat img);
     bool txt_init();
 
     //Create one relative folder for the image
     bool create_folder();
     bool create_folder(string dir_path);
 
+    //IoM alg
+    float IoM(Rect rect_1, Rect rect_2);
 
     //variable
 public:
@@ -74,11 +77,12 @@ public:
     vector<int> num_;
     vector<vector<Rect>> rect_;
     vector<string> img_path_;
-    string cur_img_path_;
+//    string cur_img_path_;
     //vector<Mat> img_;
     ofstream txtfile_;
     int state_;
     Mat cur_img_;
+    float threshold_ = 0.1;
 
 
 

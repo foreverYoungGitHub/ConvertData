@@ -23,28 +23,39 @@ ConvertData::~ConvertData()
 bool ConvertData::run()
 {
 
-    if(generate_sample())
+    if(generate_positive())
     {
-        cout<<"Success Sample"<<endl;
-        return true;
+        cout<<"Success to write positive sample"<<endl;
     }
     else
     {
-        cout<<"Fail to Sample"<<endl;
+        cout<<"Fail to write positive sample"<<endl;
+        return false;
+    }
+    if(generate_negative())
+    {
+        cout<<"Success to write negative sample"<<endl;
+    }
+    else
+    {
+        cout<<"Fail to write negative sample"<<endl;
         return false;
     }
 
+    return true;
 }
 
-//bool ConvertData::generate_positive()
-//{
-//    return generate_sample(1);
-//}
-//
-//bool ConvertData::generate_negative()
-//{
-//    return generate_sample(0);
-//}
+bool ConvertData::generate_positive()
+{
+    state_ = 1;
+    return generate_sample();
+}
+
+bool ConvertData::generate_negative()
+{
+    state_ = 0;
+    return generate_sample();
+}
 
 bool ConvertData::generate_sample()
 {
@@ -55,6 +66,12 @@ bool ConvertData::generate_sample()
     }
 
     if(!file_list_read())
+    {
+        cout<<"Cannot read file list"<<endl;
+        return false;
+    }
+
+    if(!create_folder())
     {
         cout<<"Cannot read file list"<<endl;
         return false;
@@ -88,11 +105,6 @@ bool ConvertData::generate_sample()
 //            return false;
 //        }
 
-//        if(!create_folder())
-//        {
-//            cout<<"Cannot read file list"<<endl;
-//            return false;
-//        }
 
         if(!sample_write(i))
         {
@@ -279,6 +291,12 @@ bool ConvertData::img_path_read(string path)
 
 
 //Create one relative folder for the image
+bool ConvertData::create_folder()
+{
+    string cur_img_path = params_[2] + state_ + "/";
+    create_folder(cur_img_path);
+}
+
 bool ConvertData::create_folder(string dir_path)
 {
     boost::filesystem::path dir(dir_path);
@@ -294,52 +312,91 @@ bool ConvertData::create_folder(string dir_path)
     }
 }
 
-bool ConvertData::positive_write(int i)
+bool ConvertData::sample_write(int i)
 {
+    //create the folder for file list
+    string cur_img_path = params_[2] + state_ + "/" + file_list_[i];
+    if(create_folder(cur_img_path))
+        return false;
+
     for(int j = 0; j < img_path_.size(); j++)
     {
         //read img
-        string cur_img_path = params_[1] + file_list_[i] + img_path_[j];
+        cur_img_path = params_[1] + file_list_[i] + img_path_[j];
         if(img_read(cur_img_path))
         {
             cout << "Cannot open " << cur_img_path << endl;
             continue;
         }
 
+        //create the folder for img
+        string img_path = img_path_convert(img_path_[j]) + "/";
+        cur_img_path = params_[2] + state_ + "/" + img_path;
+        if(create_folder(cur_img_path))
+            return false;
+
+        vector<Rect> cur_rect;
+        //write positive
         if(state_ == 1)
         {
-            //create the folder for file list
-            cur_img_path = params_[2] + "1/" + file_list_[i];
-            create_folder(cur_img_path);
+            cur_rect = rect_[j];
         }
+        //write negative
         if(state_ == 0)
         {
-            //create the folder for file list
-            cur_img_path = params_[2] + "0/" + file_list_[i];
-            create_folder(cur_img_path);
+            cur_rect = get_negative(cur_img_, rect_[j], threshold_);
         }
 
-        //create the folder for img
-        cur_img_path = params_[2] + file_list_[i] + img_path_[j];
-        create_folder(cur_img_path);
-
-        //create the folder for img
-        cur_img_path = params_[2] + file_list_[i] + img_path_[j];
-        create_folder(cur_img_path);
-
-        //write positve
-        for(int k = 0; k < num_[j]; k++)
+        //write img
+        for(int k = 0; k < cur_rect.size(); k++)
         {
-            positive_sample(cur_img_, rect_[j][k]);
-            img_write();
+            Mat sample = crop(cur_img_, cur_rect[k]);
+            if(img_write(cur_img_path + k + ".jpg", sample))
+                continue;
         }
     }
 
+    return true;
 }
 
-bool ConvertData::negative_write(int i)
+vector<Rect> ConvertData::get_negative(Mat img, vector<Rect> rect, float threshold)
 {
+    //approximate the dimension of rect
+    int dimension = rect[0].width;
+    for(int i=0; i<rect.size(); i++)
+    {
+        if(dimension < rect[i].width)
+            dimension = rect[i].width;
+    }
 
+    //generate the negative rect
+    vector<Rect> negative_rect;
+    for(int i = 0, count = 30; i < img.cols - dimension && count >= 0; i += dimension)
+    {
+        for(int j = 0; j < img.rows - dimension && count >= 0; j += dimension)
+        {
+            Rect cur_rect(i, j, dimension, dimension);
+            float overlap = 0;
+            for(int k = 0; k < rect.size(); k++) {
+                overlap += IoM(rect[k], cur_rect);
+            }
+            if (overlap <= threshold)
+            {
+                negative_rect.push_back(cur_rect);
+                count--;
+            }
+        }
+    }
+    return negative_rect;
+}
+
+bool ConvertData::txt_init()
+{
+    txtfile_.open(params_[0]);
+    if(txtfile_.is_open())
+        return true;
+    else
+        return false;
 }
 
 bool ConvertData::img_read(string path)
@@ -351,7 +408,22 @@ bool ConvertData::img_read(string path)
         return true;
 }
 
-Mat ConvertData::positive_sample(Mat img, Rect rect)
+bool ConvertData::img_write(string path, Mat img)
+{
+    if(imwrite(path, img))
+    {
+        txtfile_ << path << ' ' << state_ << endl;
+        cout << "Success to write " << path << endl;
+        return true;
+    }
+    else
+    {
+        cout << "Fail to write " << path << endl;
+        return true;
+    }
+}
+
+Mat ConvertData::crop(Mat img, Rect rect)
 {
     if(rect.x <= 0) rect.x = 0;
     if(rect.y <= 0) rect.y = 0;
@@ -362,12 +434,30 @@ Mat ConvertData::positive_sample(Mat img, Rect rect)
     return img(rect);
 }
 
-
-bool ConvertData::txt_init()
+string ConvertData::img_path_convert(string path)
 {
-    txtfile_.open(params_[0]);
-    if(txtfile_.is_open())
-        return true;
-    else
-        return false;
+    char * cstr = new char[path.length()+1];
+    strcpy(cstr, path.c_str());
+    char * p = strtok(cstr, ".");
+    return p;
+}
+
+float ConvertData::IoM(Rect rect_1, Rect rect_2)
+{
+    int x11 = rect_1.x;
+    int y11 = rect_1.y;
+    int x12 = rect_1.width+x11;
+    int y12 = rect_1.height+y11;
+    int x21 = rect_2.x;
+    int y21 = rect_2.y;
+    int x22 = rect_2.width+x21;
+    int y22 = rect_2.height+y22;
+    int x_overlap = std::max(0, (std::min(x12, x22) - std::max(x11, x21)));
+    int y_overlap = max(0, min(y12, y22) - max(y11, y21));
+    int intersection = x_overlap * y_overlap;
+    int rect_1_area = (y12 - y11) * (x12 -x11);
+    int rect_2_area = (y22 - y21) * (x22 - x21);
+    int min_area = min(rect_1_area, rect_2_area);
+    float result = intersection * 1.0 /min_area;
+    return result;
 }
