@@ -72,15 +72,15 @@ public:
 
     //variable
 public:
-    vector<string> params_;
+    vector<string> params_; // 0 means the path for the txt file. 1 means the path for the img file. 2 means the path for the write files and txt folder
     vector<string> file_list_;
     vector<int> num_;
     vector<vector<Rect>> rect_;
     vector<string> img_path_;
 //    string cur_img_path_;
     //vector<Mat> img_;
-    ofstream txtfile_;
-    int state_;
+    ofstream txtfile_train_, txtfile_val_;
+    int state_, txt_switch_;
     Mat cur_img_;
     float threshold_ = 0.1;
 

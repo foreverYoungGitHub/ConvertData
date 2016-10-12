@@ -59,10 +59,13 @@ bool ConvertData::generate_negative()
 
 bool ConvertData::generate_sample()
 {
-    if(!txt_init())
+    if(state_ != 0)
     {
-        cout<<"Cannot initialize txt file"<<endl;
-        return false;
+        if (!txt_init())
+        {
+            cout << "Cannot initialize txt file" << endl;
+            return false;
+        }
     }
 
     if(!file_list_read())
@@ -73,7 +76,7 @@ bool ConvertData::generate_sample()
 
     if(!create_folder())
     {
-        cout<<"Cannot read file list"<<endl;
+        cout<<"Cannot create folder"<<endl;
         return false;
     }
 
@@ -293,30 +296,38 @@ bool ConvertData::img_path_read(string path)
 //Create one relative folder for the image
 bool ConvertData::create_folder()
 {
-    string cur_img_path = params_[2] + state_ + "/";
-    create_folder(cur_img_path);
+    string cur_img_path = params_[2] + to_string(state_) + "/";
+    return create_folder(cur_img_path);
 }
 
 bool ConvertData::create_folder(string dir_path)
 {
     boost::filesystem::path dir(dir_path);
-    if(boost::filesystem::create_directory(dir))
+    if(boost::filesystem::is_directory(dir_path))
     {
-        cout<<"Success To Create Folder : "<< dir_path << endl;
+        cout<<"Folder : "<< dir_path << " is existed" << endl;
         return true;
     }
     else
     {
-        cout<<"Fail to Create Folder : "<< dir_path << endl;
-        return false;
+        if(boost::filesystem::create_directory(dir))
+        {
+            cout<<"Success To Create Folder : "<< dir_path << endl;
+            return true;
+        }
+        else
+        {
+            cout<<"Fail to Create Folder : "<< dir_path << endl;
+            return false;
+        }
     }
 }
 
 bool ConvertData::sample_write(int i)
 {
     //create the folder for file list
-    string cur_img_path = params_[2] + state_ + "/" + file_list_[i];
-    if(create_folder(cur_img_path))
+    string cur_img_path = params_[2] + to_string(state_) + "/" + file_list_[i];
+    if(!create_folder(cur_img_path))
         return false;
 
     for(int j = 0; j < img_path_.size(); j++)
@@ -331,9 +342,10 @@ bool ConvertData::sample_write(int i)
 
         //create the folder for img
         string img_path = img_path_convert(img_path_[j]) + "/";
-        cur_img_path = params_[2] + state_ + "/" + img_path;
-        if(create_folder(cur_img_path))
+        cur_img_path = params_[2] + to_string(state_) + "/" + file_list_[i] + img_path;
+        if(!create_folder(cur_img_path))
             return false;
+
 
         vector<Rect> cur_rect;
         //write positive
@@ -351,7 +363,11 @@ bool ConvertData::sample_write(int i)
         for(int k = 0; k < cur_rect.size(); k++)
         {
             Mat sample = crop(cur_img_, cur_rect[k]);
-            if(img_write(cur_img_path + k + ".jpg", sample))
+            if(k % 2 == 0)
+            {
+                txt_switch_ = 1;
+            }
+            if(img_write(cur_img_path + to_string(k) + ".jpg", sample))
                 continue;
         }
     }
@@ -369,8 +385,16 @@ vector<Rect> ConvertData::get_negative(Mat img, vector<Rect> rect, float thresho
             dimension = rect[i].width;
     }
 
-    //generate the negative rect
+
     vector<Rect> negative_rect;
+    //
+    if(dimension == 0)
+    {
+        return negative_rect;
+    }
+
+    //generate the negative rect
+
     for(int i = 0, count = 30; i < img.cols - dimension && count >= 0; i += dimension)
     {
         for(int j = 0; j < img.rows - dimension && count >= 0; j += dimension)
@@ -392,8 +416,9 @@ vector<Rect> ConvertData::get_negative(Mat img, vector<Rect> rect, float thresho
 
 bool ConvertData::txt_init()
 {
-    txtfile_.open(params_[0]);
-    if(txtfile_.is_open())
+    txtfile_train_.open(params_[2] + "train.txt");
+    txtfile_val_.open(params_[2] + "val.txt");
+    if(txtfile_val_.is_open()&&txtfile_train_.is_open())
         return true;
     else
         return false;
@@ -402,7 +427,7 @@ bool ConvertData::txt_init()
 bool ConvertData::img_read(string path)
 {
     cur_img_ = imread(path);
-    if(cur_img_.empty())
+    if(cur_img_.rows)
         return false;
     else
         return true;
@@ -412,14 +437,21 @@ bool ConvertData::img_write(string path, Mat img)
 {
     if(imwrite(path, img))
     {
-        txtfile_ << path << ' ' << state_ << endl;
-        cout << "Success to write " << path << endl;
+        if(txt_switch_ == 1)
+        {
+            txtfile_val_ << path << ' ' << state_ << endl;
+            cout << "Success to write to val : " << path << endl;
+            txt_switch_ = 0;
+            return true;
+        }
+        txtfile_train_ << path << ' ' << state_ << endl;
+        cout << "Success to write to train :" << path << endl;
         return true;
     }
     else
     {
         cout << "Fail to write " << path << endl;
-        return true;
+        return false;
     }
 }
 
@@ -429,8 +461,16 @@ Mat ConvertData::crop(Mat img, Rect rect)
     if(rect.y <= 0) rect.y = 0;
     if(img.cols < (rect.x + rect.width)) rect.width = img.cols-rect.x;
     if(img.rows < (rect.y + rect.height)) rect.height = img.rows - rect.y;
-    if(rect.width <= 0) rect.width = 0;
-    if(rect.height <= 0) rect.height = 0;
+    if(rect.width<0)
+    {
+        rect.x=0;
+        rect.width = 0;
+    }
+    if(rect.height<0)
+    {
+        rect.y=0;
+        rect.height = 0;
+    }
     return img(rect);
 }
 
