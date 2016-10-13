@@ -11,7 +11,7 @@ include_directories(${Boost_INCLUDE_DIR})
 link_directories(${Boost_LIBRARY_DIR})
 
 
-set(SOURCE_FILES main.cpp ConvertData.cpp ConvertData.h)
+set(SOURCE_FILES main.cpp ConvertData.cpp ConvertData.h DeletePath.cpp DeletePath.h)
 add_executable(ConvertData ${SOURCE_FILES})
 
 target_link_libraries(ConvertData ${OpenCV_LIBS} )
